@@ -1,0 +1,6 @@
+# Dolibarr language file - en_US - facturx
+ModuleFacturXName = Factur-X
+ModuleFacturXDesc = Generate customer invoices in Factur-X format (PDF/A-3 with embedded CII XML, EXTENDED profile)
+FacturXDescription = Generate customer invoices in Factur-X format
+FacturXDescriptionLong = Adds a PDF template for customer invoices that produces a Factur-X compliant PDF/A-3 with embedded CII XML (EXTENDED profile).
+PDFFacturxTemplate = Factur-X invoice template (PDF/A-3 + CII EXTENDED XML)

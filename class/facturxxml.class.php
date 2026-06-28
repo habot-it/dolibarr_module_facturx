@@ -1,0 +1,533 @@
+<?php
+/* Copyright (C) 2026  Alban DEZANDEE  <alban@habot.it>
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, version 3 or later.
+ */
+
+/**
+ *  \file       htdocs/custom/facturx/class/facturxxml.class.php
+ *  \ingroup    facturx
+ *  \brief      Factur-X CII XML builder (profile EXTENDED) from a Dolibarr Facture.
+ */
+
+
+/**
+ *  Builds the UN/CEFACT CrossIndustryInvoice (CII) XML payload for a Factur-X
+ *  invoice targeting the EXTENDED profile. No external dependency.
+ */
+class FacturxXml
+{
+	const GUIDELINE_EXTENDED = 'urn:cen.eu:en16931:2017#conformant#urn:factur-x.eu:1p0:extended';
+
+	const NS_RSM = 'urn:un:unece:uncefact:data:standard:CrossIndustryInvoice:100';
+	const NS_QDT = 'urn:un:unece:uncefact:data:standard:QualifiedDataType:100';
+	const NS_RAM = 'urn:un:unece:uncefact:data:standard:ReusableAggregateBusinessInformationEntity:100';
+	const NS_UDT = 'urn:un:unece:uncefact:data:standard:UnqualifiedDataType:100';
+
+	/** Dolibarr c_units.code → UN/ECE Recommendation 20. Covers every unit Dolibarr ships. */
+	private static $unitMap = array(
+		'P' => 'C62', 'SET' => 'SET',
+		'MM' => 'MMT', 'CM' => 'CMT', 'DM' => 'DMT', 'M' => 'MTR',
+		'FT' => 'FOT', 'IN' => 'INH',
+		'MM2' => 'MMK', 'CM2' => 'CMK', 'DM2' => 'DMK', 'M2' => 'MTK', 'FT2' => 'FTK', 'IN2' => 'INK',
+		'MM3' => 'MMQ', 'CM3' => 'CMQ', 'DM3' => 'DMQ', 'M3' => 'MTQ', 'FT3' => 'FTQ', 'IN3' => 'INQ',
+		'L' => 'LTR', 'GAL' => 'GLL', 'OZ3' => 'OZA',
+		'MG' => 'MGM', 'G' => 'GRM', 'KG' => 'KGM', 'T' => 'TNE', 'LB' => 'LBR', 'OZ' => 'ONZ',
+		'S' => 'SEC', 'MI' => 'MIN', 'H' => 'HUR',
+		'D' => 'DAY', 'W' => 'WEE', 'MO' => 'MON', 'Y' => 'ANN',
+	);
+
+	/** Dolibarr payment mode code → UN/EDIFACT 4461. Unknown modes fall back to 1. */
+	private static $paymentMap = array(
+		'LIQ' => '10', 'CHQ' => '20', 'VIR' => '30', 'PRE' => '49',
+		'CB' => '48', 'VAD' => '48', 'TIP' => '30', 'TRA' => '42', 'FAC' => '97',
+	);
+
+	/** ISO-3166-1 alpha-2 → ISO/IEC 6523 scheme ID for the legal-org ID. */
+	private static $legalSchemeMap = array(
+		'FR' => '0002',
+	);
+
+	/** CII TypeCode by Dolibarr Facture::type. */
+	private static $typeCodeMap = array(
+		2 => '381', // credit note
+		3 => '386', // deposit / prepayment
+		4 => '325', // proforma
+	);
+
+	/** @var DOMDocument */
+	private $doc;
+
+	/** @var Facture */
+	private $invoice;
+
+	/** @var string */
+	private $currency;
+
+	/** @var array<int,string> */
+	private $unitCodeCache = array();
+
+	public static function buildFromInvoice($invoice)
+	{
+		return (new self($invoice))->build();
+	}
+
+	private function __construct($invoice)
+	{
+		$this->invoice = $invoice;
+		$this->currency = !empty($invoice->multicurrency_code)
+			? $invoice->multicurrency_code
+			: (getDolGlobalString('MAIN_MONNAIE') ?: 'EUR');
+		$this->doc = new DOMDocument('1.0', 'UTF-8');
+		$this->doc->formatOutput = true;
+	}
+
+	private function build()
+	{
+		$this->preloadUnitCodes();
+
+		$root = $this->doc->createElementNS(self::NS_RSM, 'rsm:CrossIndustryInvoice');
+		foreach (array('qdt' => self::NS_QDT, 'ram' => self::NS_RAM, 'udt' => self::NS_UDT) as $p => $ns) {
+			$root->setAttributeNS('http://www.w3.org/2000/xmlns/', 'xmlns:'.$p, $ns);
+		}
+		$this->doc->appendChild($root);
+		$root->appendChild($this->buildContext());
+		$root->appendChild($this->buildDocument());
+		$root->appendChild($this->buildTransaction());
+
+		return $this->doc->saveXML();
+	}
+
+	private function buildContext()
+	{
+		$ctx = $this->el('rsm:ExchangedDocumentContext');
+		$g = $ctx->appendChild($this->el('ram:GuidelineSpecifiedDocumentContextParameter'));
+		$g->appendChild($this->el('ram:ID', self::GUIDELINE_EXTENDED));
+		return $ctx;
+	}
+
+	private function buildDocument()
+	{
+		$inv = $this->invoice;
+		$doc = $this->el('rsm:ExchangedDocument');
+		$doc->appendChild($this->el('ram:ID', (string) $inv->ref));
+		$doc->appendChild($this->el('ram:TypeCode', self::$typeCodeMap[(int) $inv->type] ?? '380'));
+		$doc->appendChild($this->dateEl('ram:IssueDateTime', $inv->date));
+
+		if (!empty($inv->note_public)) {
+			$note = $doc->appendChild($this->el('ram:IncludedNote'));
+			$note->appendChild($this->el('ram:Content', (string) $inv->note_public));
+		}
+		return $doc;
+	}
+
+	private function buildTransaction()
+	{
+		$tx = $this->el('rsm:SupplyChainTradeTransaction');
+		$i = 1;
+		foreach ((array) $this->invoice->lines as $line) {
+			$tx->appendChild($this->buildLine($line, $i++));
+		}
+		$tx->appendChild($this->buildAgreement());
+		$tx->appendChild($this->buildDelivery());
+		$tx->appendChild($this->buildSettlement());
+		return $tx;
+	}
+
+	private function buildLine($line, $num)
+	{
+		$netUnit = (float) $line->subprice * (1 - (float) $line->remise_percent / 100);
+		$li = $this->el('ram:IncludedSupplyChainTradeLineItem');
+
+		$assoc = $li->appendChild($this->el('ram:AssociatedDocumentLineDocument'));
+		$assoc->appendChild($this->el('ram:LineID', (string) $num));
+
+		$prod = $li->appendChild($this->el('ram:SpecifiedTradeProduct'));
+		$prod->appendChild($this->el('ram:Name', $this->productName($line)));
+
+		$ag = $li->appendChild($this->el('ram:SpecifiedLineTradeAgreement'));
+		$gross = $ag->appendChild($this->el('ram:GrossPriceProductTradePrice'));
+		$gross->appendChild($this->amount('ram:ChargeAmount', (float) $line->subprice));
+		$net = $ag->appendChild($this->el('ram:NetPriceProductTradePrice'));
+		$net->appendChild($this->amount('ram:ChargeAmount', $netUnit));
+
+		$del = $li->appendChild($this->el('ram:SpecifiedLineTradeDelivery'));
+		$qty = $this->el('ram:BilledQuantity', $this->num((float) $line->qty));
+		$qty->setAttribute('unitCode', $this->unitCode($line));
+		$del->appendChild($qty);
+
+		$stl = $li->appendChild($this->el('ram:SpecifiedLineTradeSettlement'));
+		$stl->appendChild($this->taxEl((float) $line->tva_tx));
+		$sum = $stl->appendChild($this->el('ram:SpecifiedTradeSettlementLineMonetarySummation'));
+		$sum->appendChild($this->amount('ram:LineTotalAmount', (float) $line->total_ht));
+
+		return $li;
+	}
+
+	private function productName($line)
+	{
+		foreach (array($line->product_label ?? null, $line->label ?? null, $line->desc ?? null) as $v) {
+			if (!empty($v)) {
+				return (string) $v;
+			}
+		}
+		return '.';
+	}
+
+	private function buildAgreement()
+	{
+		global $mysoc;
+		$inv = $this->invoice;
+		$ag = $this->el('ram:ApplicableHeaderTradeAgreement');
+
+		if (!empty($inv->ref_client)) {
+			$ag->appendChild($this->el('ram:BuyerReference', (string) $inv->ref_client));
+		}
+		$ag->appendChild($this->buildParty('ram:SellerTradeParty', $mysoc));
+		if (!empty($inv->thirdparty)) {
+			$ag->appendChild($this->buildParty('ram:BuyerTradeParty', $inv->thirdparty));
+		}
+		if (!empty($inv->ref_client)) {
+			$ref = $ag->appendChild($this->el('ram:BuyerOrderReferencedDocument'));
+			$ref->appendChild($this->el('ram:IssuerAssignedID', (string) $inv->ref_client));
+		}
+		foreach (array('commande' => 'ram:SellerOrderReferencedDocument', 'contrat' => 'ram:ContractReferencedDocument') as $element => $tag) {
+			$linked = $this->firstLinkedRef($element);
+			if ($linked !== '') {
+				$ref = $ag->appendChild($this->el($tag));
+				$ref->appendChild($this->el('ram:IssuerAssignedID', $linked));
+			}
+		}
+		return $ag;
+	}
+
+	private function firstLinkedRef($element)
+	{
+		if (empty($this->invoice->linkedObjects[$element]) || !is_array($this->invoice->linkedObjects[$element])) {
+			return '';
+		}
+		foreach ($this->invoice->linkedObjects[$element] as $obj) {
+			if (!empty($obj->ref)) {
+				return (string) $obj->ref;
+			}
+		}
+		return '';
+	}
+
+	private function buildParty($tag, $party)
+	{
+		$el = $this->el($tag);
+		$el->appendChild($this->el('ram:Name', (string) ($party->name ?? '')));
+
+		if (!empty($party->idprof1)) {
+			$legal = $el->appendChild($this->el('ram:SpecifiedLegalOrganization'));
+			$id = $legal->appendChild($this->el('ram:ID', (string) $party->idprof1));
+			$country = strtoupper((string) ($party->country_code ?? ''));
+			if (isset(self::$legalSchemeMap[$country])) {
+				$id->setAttribute('schemeID', self::$legalSchemeMap[$country]);
+			}
+		}
+
+		$contact = $this->buildContact($party);
+		if ($contact !== null) {
+			$el->appendChild($contact);
+		}
+		$el->appendChild($this->buildAddress($party));
+
+		if (!empty($party->tva_intra)) {
+			$reg = $el->appendChild($this->el('ram:SpecifiedTaxRegistration'));
+			$id = $reg->appendChild($this->el('ram:ID', (string) $party->tva_intra));
+			$id->setAttribute('schemeID', 'VA');
+		}
+		return $el;
+	}
+
+	private function buildContact($party)
+	{
+		$person = (string) ($party->civility_name ?? $party->name_alias ?? '');
+		$phone  = (string) ($party->phone ?? '');
+		$email  = (string) ($party->email ?? '');
+		if ($person === '' && $phone === '' && $email === '') {
+			return null;
+		}
+
+		$c = $this->el('ram:DefinedTradeContact');
+		if ($person !== '') {
+			$c->appendChild($this->el('ram:PersonName', $person));
+		}
+		if ($phone !== '') {
+			$tel = $c->appendChild($this->el('ram:TelephoneUniversalCommunication'));
+			$tel->appendChild($this->el('ram:CompleteNumber', $phone));
+		}
+		if ($email !== '') {
+			$em = $c->appendChild($this->el('ram:EmailURIUniversalCommunication'));
+			$uri = $em->appendChild($this->el('ram:URIID', $email));
+			$uri->setAttribute('schemeID', 'SMTP');
+		}
+		return $c;
+	}
+
+	private function buildAddress($party)
+	{
+		$a = $this->el('ram:PostalTradeAddress');
+		if (!empty($party->zip)) {
+			$a->appendChild($this->el('ram:PostcodeCode', (string) $party->zip));
+		}
+
+		$lines = array_values(array_filter(
+			array_map('trim', preg_split('/\r\n|\r|\n/', (string) ($party->address ?? ''))),
+			'strlen'
+		));
+		foreach (array('ram:LineOne', 'ram:LineTwo', 'ram:LineThree') as $i => $tag) {
+			if (isset($lines[$i])) {
+				$a->appendChild($this->el($tag, $lines[$i]));
+			}
+		}
+
+		if (!empty($party->town)) {
+			$a->appendChild($this->el('ram:CityName', (string) $party->town));
+		}
+		if (!empty($party->country_code)) {
+			$a->appendChild($this->el('ram:CountryID', strtoupper((string) $party->country_code)));
+		}
+		return $a;
+	}
+
+	private function buildDelivery()
+	{
+		$d = $this->el('ram:ApplicableHeaderTradeDelivery');
+		if (!empty($this->invoice->date_delivery)) {
+			$evt = $d->appendChild($this->el('ram:ActualDeliverySupplyChainEvent'));
+			$evt->appendChild($this->dateEl('ram:OccurrenceDateTime', $this->invoice->date_delivery));
+		}
+		return $d;
+	}
+
+	private function buildSettlement()
+	{
+		$inv = $this->invoice;
+		$s = $this->el('ram:ApplicableHeaderTradeSettlement');
+		$s->appendChild($this->el('ram:InvoiceCurrencyCode', $this->currency));
+
+		$pm = $this->buildPaymentMeans();
+		if ($pm !== null) {
+			$s->appendChild($pm);
+		}
+
+		$dominantRate = 0.0;
+		foreach ($this->aggregateTaxes() as $rate => $amounts) {
+			$dominantRate = max($dominantRate, (float) $rate);
+			$t = $s->appendChild($this->el('ram:ApplicableTradeTax'));
+			$t->appendChild($this->amount('ram:CalculatedAmount', $amounts['vat']));
+			$t->appendChild($this->el('ram:TypeCode', 'VAT'));
+			$t->appendChild($this->el('ram:CategoryCode', $rate > 0 ? 'S' : 'Z'));
+			$t->appendChild($this->amount('ram:BasisAmount', $amounts['base']));
+			$t->appendChild($this->el('ram:RateApplicablePercent', $this->num((float) $rate)));
+		}
+
+		$allow = $this->buildDocAllowance($dominantRate);
+		if ($allow !== null) {
+			$s->appendChild($allow);
+		}
+
+		if (!empty($inv->date_lim_reglement)) {
+			$terms = $s->appendChild($this->el('ram:SpecifiedTradePaymentTerms'));
+			$terms->appendChild($this->dateEl('ram:DueDateDateTime', $inv->date_lim_reglement));
+		}
+
+		$sum = $s->appendChild($this->el('ram:SpecifiedTradeSettlementHeaderMonetarySummation'));
+		$linesHT = 0.0;
+		foreach ((array) $inv->lines as $l) {
+			$linesHT += (float) $l->total_ht;
+		}
+		$paid = method_exists($inv, 'getSommePaiement') ? (float) $inv->getSommePaiement() : 0.0;
+		$sum->appendChild($this->amount('ram:LineTotalAmount', $linesHT));
+		$sum->appendChild($this->amount('ram:TaxBasisTotalAmount', (float) $inv->total_ht));
+		$taxTotal = $sum->appendChild($this->amount('ram:TaxTotalAmount', (float) $inv->total_tva));
+		$taxTotal->setAttribute('currencyID', $this->currency);
+		$sum->appendChild($this->amount('ram:GrandTotalAmount', (float) $inv->total_ttc));
+		$sum->appendChild($this->amount('ram:DuePayableAmount', (float) $inv->total_ttc - $paid));
+
+		$creditRef = $this->buildCreditNoteReference();
+		if ($creditRef !== null) {
+			$s->appendChild($creditRef);
+		}
+		return $s;
+	}
+
+	private function buildPaymentMeans()
+	{
+		$code = strtoupper((string) ($this->invoice->mode_reglement_code ?? ''));
+		$modeCode = $code !== '' ? (self::$paymentMap[$code] ?? '1') : '';
+		$account = $this->fetchBankAccount();
+		if ($modeCode === '' && $account === null) {
+			return null;
+		}
+
+		$m = $this->el('ram:SpecifiedTradeSettlementPaymentMeans');
+		$m->appendChild($this->el('ram:TypeCode', $modeCode !== '' ? $modeCode : '1'));
+
+		if ($account !== null && !empty($account->iban)) {
+			$payee = $m->appendChild($this->el('ram:PayeePartyCreditorFinancialAccount'));
+			$payee->appendChild($this->el('ram:IBANID', (string) $account->iban));
+			if (!empty($account->owner_name)) {
+				$payee->appendChild($this->el('ram:AccountName', (string) $account->owner_name));
+			}
+		}
+		if ($account !== null && !empty($account->bic)) {
+			$inst = $m->appendChild($this->el('ram:PayeeSpecifiedCreditorFinancialInstitution'));
+			$inst->appendChild($this->el('ram:BICID', (string) $account->bic));
+		}
+		return $m;
+	}
+
+	private function fetchBankAccount()
+	{
+		if (empty($this->invoice->fk_account) || empty($this->invoice->db)) {
+			return null;
+		}
+		require_once DOL_DOCUMENT_ROOT.'/compta/bank/class/account.class.php';
+		$a = new Account($this->invoice->db);
+		return $a->fetch((int) $this->invoice->fk_account) > 0 ? $a : null;
+	}
+
+	private function buildDocAllowance($dominantRate)
+	{
+		$amount = (float) ($this->invoice->remise_absolue ?? 0);
+		if ($amount <= 0) {
+			return null;
+		}
+		$a = $this->el('ram:SpecifiedTradeAllowanceCharge');
+		$ind = $a->appendChild($this->el('ram:ChargeIndicator'));
+		$ind->appendChild($this->doc->createElementNS(self::NS_UDT, 'udt:Indicator', 'false'));
+		$a->appendChild($this->amount('ram:ActualAmount', $amount));
+		$a->appendChild($this->el('ram:Reason', 'Document-level discount'));
+
+		$t = $a->appendChild($this->el('ram:CategoryTradeTax'));
+		$t->appendChild($this->el('ram:TypeCode', 'VAT'));
+		$t->appendChild($this->el('ram:CategoryCode', 'S'));
+		$t->appendChild($this->el('ram:RateApplicablePercent', $this->num($dominantRate)));
+		return $a;
+	}
+
+	private function buildCreditNoteReference()
+	{
+		$inv = $this->invoice;
+		if ((int) ($inv->type ?? 0) !== 2 || empty($inv->fk_facture_source) || empty($inv->db)) {
+			return null;
+		}
+		require_once DOL_DOCUMENT_ROOT.'/compta/facture/class/facture.class.php';
+		$src = new Facture($inv->db);
+		if ($src->fetch((int) $inv->fk_facture_source) <= 0 || empty($src->ref)) {
+			return null;
+		}
+		$ref = $this->el('ram:InvoiceReferencedDocument');
+		$ref->appendChild($this->el('ram:IssuerAssignedID', (string) $src->ref));
+		if (!empty($src->date)) {
+			$ref->appendChild($this->dateEl('ram:FormattedIssueDateTime', $src->date, true));
+		}
+		return $ref;
+	}
+
+	/** @return array<string,array{base:float,vat:float}> */
+	private function aggregateTaxes()
+	{
+		$buckets = array();
+		foreach ((array) $this->invoice->lines as $l) {
+			$rate = (string) (float) $l->tva_tx;
+			if (!isset($buckets[$rate])) {
+				$buckets[$rate] = array('base' => 0.0, 'vat' => 0.0);
+			}
+			$buckets[$rate]['base'] += (float) $l->total_ht;
+			$buckets[$rate]['vat']  += (float) $l->total_tva;
+		}
+		return $buckets;
+	}
+
+	private function preloadUnitCodes()
+	{
+		$ids = array();
+		foreach ((array) $this->invoice->lines as $l) {
+			if (!empty($l->fk_unit)) {
+				$ids[(int) $l->fk_unit] = true;
+			}
+		}
+		if (empty($ids) || empty($this->invoice->db)) {
+			return;
+		}
+		$db = $this->invoice->db;
+		$sql = 'SELECT rowid, code FROM '.$db->prefix().'c_units WHERE rowid IN ('.implode(',', array_map('intval', array_keys($ids))).')';
+		$res = $db->query($sql);
+		if (!$res) {
+			return;
+		}
+		while ($row = $db->fetch_object($res)) {
+			$this->unitCodeCache[(int) $row->rowid] = self::$unitMap[(string) $row->code] ?? 'C62';
+		}
+		$db->free($res);
+	}
+
+	private function unitCode($line)
+	{
+		if (!empty($line->fk_unit) && isset($this->unitCodeCache[(int) $line->fk_unit])) {
+			return $this->unitCodeCache[(int) $line->fk_unit];
+		}
+		return 'C62';
+	}
+
+	private function taxEl($rate)
+	{
+		$t = $this->el('ram:ApplicableTradeTax');
+		$t->appendChild($this->el('ram:TypeCode', 'VAT'));
+		$t->appendChild($this->el('ram:CategoryCode', $rate > 0 ? 'S' : 'Z'));
+		$t->appendChild($this->el('ram:RateApplicablePercent', $this->num($rate)));
+		return $t;
+	}
+
+	/** Create an rsm:* or ram:* element (namespace inferred from prefix) with optional text. */
+	private function el($name, $text = null)
+	{
+		$ns = strpos($name, 'rsm:') === 0 ? self::NS_RSM : self::NS_RAM;
+		$el = $this->doc->createElementNS($ns, $name);
+		if ($text !== null && $text !== '') {
+			$el->appendChild($this->doc->createTextNode((string) $text));
+		}
+		return $el;
+	}
+
+	/** Wraps a date in ram:X > udt:DateTimeString format="102". Use $qdt=true for qdt:DateTimeString. */
+	private function dateEl($tag, $date, $qdt = false)
+	{
+		$ns = $qdt ? self::NS_QDT : self::NS_UDT;
+		$prefix = $qdt ? 'qdt' : 'udt';
+		$parent = $this->el($tag);
+		$ds = $this->doc->createElementNS($ns, $prefix.':DateTimeString', $this->formatDate102($date));
+		$ds->setAttribute('format', '102');
+		$parent->appendChild($ds);
+		return $parent;
+	}
+
+	private function amount($name, $value)
+	{
+		return $this->el($name, $this->num((float) $value));
+	}
+
+	private function num($n)
+	{
+		return number_format((float) $n, 2, '.', '');
+	}
+
+	private function formatDate102($date)
+	{
+		if (empty($date)) {
+			return date('Ymd');
+		}
+		if (is_numeric($date)) {
+			return dol_print_date((int) $date, '%Y%m%d');
+		}
+		$ts = strtotime((string) $date);
+		return $ts ? date('Ymd', $ts) : date('Ymd');
+	}
+}

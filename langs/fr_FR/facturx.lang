@@ -1,0 +1,6 @@
+# Dolibarr language file - fr_FR - facturx
+ModuleFacturXName = Factur-X
+ModuleFacturXDesc = Génération de factures au format Factur-X (PDF/A-3 avec XML CII embarqué, profil EXTENDED)
+FacturXDescription = Génération de factures au format Factur-X
+FacturXDescriptionLong = Ajoute un modèle PDF pour les factures clients qui produit un PDF/A-3 conforme Factur-X avec XML CII embarqué (profil EXTENDED).
+PDFFacturxTemplate = Modèle de facture au format Factur-X (PDF/A-3 + XML CII EXTENDED)
