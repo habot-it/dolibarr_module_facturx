@@ -120,7 +120,54 @@ class FacturxXml
 			$note = $doc->appendChild($this->el('ram:IncludedNote'));
 			$note->appendChild($this->el('ram:Content', (string) $inv->note_public));
 		}
+
+		foreach ($this->frenchMandatoryNotes() as $code => $text) {
+			$note = $doc->appendChild($this->el('ram:IncludedNote'));
+			$note->appendChild($this->el('ram:Content', $text));
+			$note->appendChild($this->el('ram:SubjectCode', $code));
+		}
 		return $doc;
+	}
+
+	/**
+	 *  French mandatory footer mentions as coded notes (BR-FR-05; at most one note
+	 *  per code, BR-FR-06). Emitted whenever the seller is French — the Code de
+	 *  commerce requires them regardless of the buyer's country. The defaults match
+	 *  the standard boilerplate; companies applying an escompte or a specific
+	 *  penalty rate must override them with the constants FACTURX_NOTE_PMD,
+	 *  FACTURX_NOTE_PMT, FACTURX_NOTE_AAB, FACTURX_NOTE_TXD (Home → Setup → Other).
+	 *
+	 *  @return array<string,string>  UNTDID 4451 subject code => note content
+	 */
+	private function frenchMandatoryNotes()
+	{
+		global $mysoc;
+		if (empty($mysoc) || strtoupper((string) ($mysoc->country_code ?? '')) !== 'FR') {
+			return array();
+		}
+		$notes = array();
+		foreach (self::defaultNotes() as $code => $default) {
+			$notes[$code] = getDolGlobalString('FACTURX_NOTE_'.$code, $default);
+		}
+		return array_filter($notes, 'strlen');
+	}
+
+	/**
+	 *  Default French wording for the coded notes, keyed by UNTDID 4451 subject
+	 *  code. Single source of truth shared with the setup page (admin/setup.php),
+	 *  which shows these texts as placeholders. TXD (single VAT group) has no
+	 *  default on purpose: it only applies to companies in that situation.
+	 *
+	 *  @return array<string,string>
+	 */
+	public static function defaultNotes()
+	{
+		return array(
+			'PMD' => "Pénalités de retard : trois fois le taux d'intérêt légal (art. L441-10 du Code de commerce).",
+			'PMT' => "Indemnité forfaitaire pour frais de recouvrement en cas de retard de paiement : 40 EUR (art. D441-5 du Code de commerce).",
+			'AAB' => "Pas d'escompte pour paiement anticipé.",
+			'TXD' => '',
+		);
 	}
 
 	private function buildTransaction()
@@ -236,12 +283,53 @@ class FacturxXml
 		}
 		$el->appendChild($this->buildAddress($party));
 
+		// Electronic address / endpoint ID (BT-34 seller, BT-49 buyer — BR-FR-12/13).
+		// Must sit between PostalTradeAddress and SpecifiedTaxRegistration (CII order).
+		$endpoint = $this->endpointFor($party, $tag === 'ram:SellerTradeParty');
+		if ($endpoint !== null) {
+			$uri = $el->appendChild($this->el('ram:URIUniversalCommunication'));
+			$id = $uri->appendChild($this->el('ram:URIID', $endpoint[1]));
+			$id->setAttribute('schemeID', $endpoint[0]);
+		}
+
 		if (!empty($party->tva_intra)) {
 			$reg = $el->appendChild($this->el('ram:SpecifiedTaxRegistration'));
 			$id = $reg->appendChild($this->el('ram:ID', (string) $party->tva_intra));
 			$id->setAttribute('schemeID', 'VA');
 		}
 		return $el;
+	}
+
+	/**
+	 *  Resolve the electronic address for a trade party. French parties use the
+	 *  2026 CTC scheme 0225 with the SIREN (the PPF/PA directory is keyed on it);
+	 *  the seller value can be overridden — e.g. to append a routing code,
+	 *  SIREN_XXX — with FACTURX_SELLER_ENDPOINT_ID / FACTURX_SELLER_ENDPOINT_SCHEME.
+	 *  Non-French parties fall back to the e-mail address (EAS code EM).
+	 *
+	 *  @param  Societe	$party     Party (thirdparty or $mysoc)
+	 *  @param  bool	$isSeller  True when building SellerTradeParty
+	 *  @return array{0:string,1:string}|null  [schemeID, value], or null to omit
+	 */
+	private function endpointFor($party, $isSeller)
+	{
+		if ($isSeller && getDolGlobalString('FACTURX_SELLER_ENDPOINT_ID') !== '') {
+			return array(getDolGlobalString('FACTURX_SELLER_ENDPOINT_SCHEME', '0225'), getDolGlobalString('FACTURX_SELLER_ENDPOINT_ID'));
+		}
+		if (strtoupper((string) ($party->country_code ?? '')) === 'FR') {
+			$siren = preg_replace('/\D/', '', (string) ($party->idprof1 ?? ''));
+			if (strlen($siren) === 9) {
+				return array('0225', $siren);
+			}
+			$siret = preg_replace('/\D/', '', (string) ($party->idprof2 ?? ''));
+			if (strlen($siret) === 14) {
+				return array('0225', substr($siret, 0, 9));
+			}
+		}
+		if (!empty($party->email)) {
+			return array('EM', (string) $party->email);
+		}
+		return null;
 	}
 
 	private function buildContact($party)
@@ -262,9 +350,11 @@ class FacturxXml
 			$tel->appendChild($this->el('ram:CompleteNumber', $phone));
 		}
 		if ($email !== '') {
+			// No schemeID here: unlike the endpoint URIID, the trade-contact e-mail
+			// URIID takes no scheme in Factur-X (FNFE: "attribute not used in the
+			// given context").
 			$em = $c->appendChild($this->el('ram:EmailURIUniversalCommunication'));
-			$uri = $em->appendChild($this->el('ram:URIID', $email));
-			$uri->setAttribute('schemeID', 'SMTP');
+			$em->appendChild($this->el('ram:URIID', $email));
 		}
 		return $c;
 	}
@@ -297,10 +387,14 @@ class FacturxXml
 
 	private function buildDelivery()
 	{
+		// The element itself is XSD-mandatory but must not stay empty
+		// (PEPPOL-EN16931-R008): fall back to the invoice date as the delivery
+		// date (BT-72) when Dolibarr has no delivery date.
 		$d = $this->el('ram:ApplicableHeaderTradeDelivery');
-		if (!empty($this->invoice->date_delivery)) {
+		$date = !empty($this->invoice->date_delivery) ? $this->invoice->date_delivery : $this->invoice->date;
+		if (!empty($date)) {
 			$evt = $d->appendChild($this->el('ram:ActualDeliverySupplyChainEvent'));
-			$evt->appendChild($this->dateEl('ram:OccurrenceDateTime', $this->invoice->date_delivery));
+			$evt->appendChild($this->dateEl('ram:OccurrenceDateTime', $date));
 		}
 		return $d;
 	}
@@ -319,11 +413,13 @@ class FacturxXml
 		$dominantRate = 0.0;
 		foreach ($this->aggregateTaxes() as $rate => $amounts) {
 			$dominantRate = max($dominantRate, (float) $rate);
+			// CII TradeTaxType sequence: CalculatedAmount, TypeCode, BasisAmount,
+			// CategoryCode, RateApplicablePercent — BasisAmount before CategoryCode.
 			$t = $s->appendChild($this->el('ram:ApplicableTradeTax'));
 			$t->appendChild($this->amount('ram:CalculatedAmount', $amounts['vat']));
 			$t->appendChild($this->el('ram:TypeCode', 'VAT'));
-			$t->appendChild($this->el('ram:CategoryCode', $rate > 0 ? 'S' : 'Z'));
 			$t->appendChild($this->amount('ram:BasisAmount', $amounts['base']));
+			$t->appendChild($this->el('ram:CategoryCode', $rate > 0 ? 'S' : 'Z'));
 			$t->appendChild($this->el('ram:RateApplicablePercent', $this->num((float) $rate)));
 		}
 
@@ -332,9 +428,15 @@ class FacturxXml
 			$s->appendChild($allow);
 		}
 
-		if (!empty($inv->date_lim_reglement)) {
+		$termsLabel = $this->paymentTermsLabel();
+		if ($termsLabel !== '' || !empty($inv->date_lim_reglement)) {
 			$terms = $s->appendChild($this->el('ram:SpecifiedTradePaymentTerms'));
-			$terms->appendChild($this->dateEl('ram:DueDateDateTime', $inv->date_lim_reglement));
+			if ($termsLabel !== '') {
+				$terms->appendChild($this->el('ram:Description', $termsLabel));
+			}
+			if (!empty($inv->date_lim_reglement)) {
+				$terms->appendChild($this->dateEl('ram:DueDateDateTime', $inv->date_lim_reglement));
+			}
 		}
 
 		$sum = $s->appendChild($this->el('ram:SpecifiedTradeSettlementHeaderMonetarySummation'));
@@ -348,6 +450,9 @@ class FacturxXml
 		$taxTotal = $sum->appendChild($this->amount('ram:TaxTotalAmount', (float) $inv->total_tva));
 		$taxTotal->setAttribute('currencyID', $this->currency);
 		$sum->appendChild($this->amount('ram:GrandTotalAmount', (float) $inv->total_ttc));
+		// BT-113: required for the BR-FXEXT-CO-16 arithmetic
+		// (DuePayable = GrandTotal - TotalPrepaid).
+		$sum->appendChild($this->amount('ram:TotalPrepaidAmount', $paid));
 		$sum->appendChild($this->amount('ram:DuePayableAmount', (float) $inv->total_ttc - $paid));
 
 		$creditRef = $this->buildCreditNoteReference();
@@ -355,6 +460,21 @@ class FacturxXml
 			$s->appendChild($creditRef);
 		}
 		return $s;
+	}
+
+	/** Payment terms label (BT-20), translated the same way the PDF templates do. */
+	private function paymentTermsLabel()
+	{
+		global $langs;
+		$inv = $this->invoice;
+		$code = (string) ($inv->cond_reglement_code ?? '');
+		if ($code !== '' && is_object($langs)) {
+			$trans = $langs->transnoentities('PaymentCondition'.$code);
+			if ($trans !== 'PaymentCondition'.$code) {
+				return $trans;
+			}
+		}
+		return (string) ($inv->cond_reglement_doc ?? ($inv->cond_reglement_label ?? ''));
 	}
 
 	private function buildPaymentMeans()

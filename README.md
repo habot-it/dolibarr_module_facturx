@@ -53,6 +53,32 @@ Generate a customer invoice PDF as usual. The resulting file is a PDF/A-3 with
 `factur-x.xml` attached. Tools such as FNFE-MPE's validator, Chorus Pro and most
 Factur-X readers will pick up the embedded invoice data automatically.
 
+## French mandatory data (BR-FR rules)
+
+Since 1.1.0 the XML carries the French CTC data checked by the FNFE-MPE
+validator:
+
+- **Electronic addresses (BT-34 seller / BT-49 buyer, rules BR-FR-12/13).**
+  French parties are identified with scheme `0225` and their SIREN (taken from
+  professional id 1, or derived from the SIRET); other parties fall back to
+  their e-mail address (EAS `EM`). The seller value and scheme can be changed
+  on the module **setup page** (e.g. `123456789_0001` to append a routing code).
+- **Coded legal mentions (BT-22, rules BR-FR-05/06).** Late-payment penalties
+  (`PMD`), the 40 € recovery indemnity (`PMT`) and the discount policy (`AAB`)
+  are emitted with standard French defaults when the selling company is French.
+  **Review them on the setup page**: if you grant a discount or apply a specific
+  penalty rate, replace the default wording (a `TXD` note is also available for
+  single-VAT-group companies).
+
+Both are configured from the module **setup page**: Home → Setup →
+Modules/Applications → gear icon on the **Factur-X** line. The page stores the
+`FACTURX_NOTE_*` / `FACTURX_SELLER_ENDPOINT_*` constants; an empty field falls
+back to the built-in default.
+
+These notes feed the structured XML; the footer visible on the PDF still comes
+from your usual Dolibarr free-text footer (**Invoices → Setup**), so keep both
+consistent.
+
 ## Scope and known limitations
 
 - Only customer invoices (`Facture`) are wired up. Supplier invoices and other
@@ -63,8 +89,14 @@ Factur-X readers will pick up the embedded invoice data automatically.
 - Invoice `TypeCode` mapping covers standard (380), credit note (381),
   deposit (386) and proforma (325). Situation invoices (Dolibarr type 5) fall
   back to 380.
-- No configuration page yet — conformance level, XML filename and
-  `/AFRelationship` value are currently set in code (see `pdf_facturx.modules.php`).
+- The setup page only covers the French mentions and the seller electronic
+  address. Conformance level, XML filename and `/AFRelationship` value are
+  still set in code (see `pdf_facturx.modules.php`).
+- PDF/A requires embedded fonts, so the layout is rendered with DejaVu Sans
+  instead of the (non-embeddable) Helvetica default. Set `FACTURX_PDF_FONT` to
+  another TCPDF font name, or define `MAIN_PDF_FORCE_FONT` globally to take
+  precedence. If you use `MAIN_ADD_PDF_BACKGROUND`, make sure the background
+  PDF itself has its fonts embedded (or converted to outlines).
 
 ## Architecture
 

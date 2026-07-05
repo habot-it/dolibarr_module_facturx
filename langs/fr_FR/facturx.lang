@@ -4,3 +4,24 @@ ModuleFacturXDesc = Génération de factures au format Factur-X (PDF/A-3 avec XM
 FacturXDescription = Génération de factures au format Factur-X
 FacturXDescriptionLong = Ajoute un modèle PDF pour les factures clients qui produit un PDF/A-3 conforme Factur-X avec XML CII embarqué (profil EXTENDED).
 PDFFacturxTemplate = Modèle de facture au format Factur-X (PDF/A-3 + XML CII EXTENDED)
+
+# Setup page
+FacturXSetup = Configuration du module Factur-X
+FacturXSetupPageHelp = Ces réglages alimentent le XML structuré (CII) embarqué dans les PDF Factur-X. Ils ne modifient pas le rendu visuel du PDF : le pied de page reste géré par le texte libre de Facturation → Configuration.
+FacturXNotesTitle = Mentions légales françaises (notes codées BT-22)
+FacturXNotesHelp = Notes exigées par le contrôle FNFE/CIUS-FR (règle BR-FR-05, une seule note par code — BR-FR-06). Émises uniquement si la société émettrice est française. Laisser un champ vide pour utiliser le texte par défaut affiché en grisé.
+FacturXNotePMD = Pénalités de retard (code PMD)
+FacturXNotePMDHelp = Taux des pénalités exigibles en cas de retard de paiement.
+FacturXNotePMT = Indemnité forfaitaire de recouvrement (code PMT)
+FacturXNotePMTHelp = Indemnité forfaitaire de 40 € due en cas de retard de paiement (B2B).
+FacturXNoteAAB = Escompte (code AAB)
+FacturXNoteAABHelp = Conditions d'escompte pour paiement anticipé, ou absence d'escompte.
+FacturXNoteTXD = Assujetti unique TVA (code TXD)
+FacturXNoteTXDHelp = Uniquement si votre société est membre d'un assujetti unique (groupe TVA). Vide = note non émise.
+FacturXNoteNoDefault = (pas de défaut — vide signifie que la note n'est pas émise)
+FacturXEndpointTitle = Adresse électronique du vendeur (BT-34)
+FacturXEndpointHelp = Identifiant d'adressage utilisé par l'annuaire des plateformes (réforme 2026). Par défaut : votre SIREN avec le schéma 0225. L'adresse de l'acheteur (BT-49) est déduite automatiquement de la fiche du tiers (SIREN, sinon e-mail).
+FacturXSellerEndpointId = Valeur de l'adresse électronique
+FacturXSellerEndpointIdHelp = Vide = SIREN de la société (grisé). Renseignez par exemple SIREN_XXXX pour ajouter un code routage.
+FacturXSellerEndpointScheme = Schéma d'identification (schemeID)
+FacturXSellerEndpointSchemeHelp = Vide = 0225 (SIREN, réforme française). Utilisez EM pour une adresse e-mail.

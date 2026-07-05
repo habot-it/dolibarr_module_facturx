@@ -69,9 +69,19 @@ class pdf_facturx extends pdf_sponge
 		$savedBg = $conf->global->MAIN_ADD_PDF_BACKGROUND ?? '';
 		$conf->global->MAIN_ADD_PDF_BACKGROUND = '';
 
+		// PDF/A requires every font used in the page content to be embedded; the
+		// default Helvetica is a non-embedded core font. Sponge honours
+		// MAIN_PDF_FORCE_FONT, so point it at an embeddable TrueType (DejaVu is
+		// bundled with Dolibarr's TCPDF) unless the user already forces a font.
+		$savedFont = getDolGlobalString('MAIN_PDF_FORCE_FONT');
+		if ($savedFont === '') {
+			$conf->global->MAIN_PDF_FORCE_FONT = getDolGlobalString('FACTURX_PDF_FONT', 'dejavusans');
+		}
+
 		$result = parent::write_file($object, $outputlangs, $srctemplatepath, $hidedetails, $hidedesc, $hideref);
 
 		$conf->global->MAIN_ADD_PDF_BACKGROUND = $savedBg;
+		$conf->global->MAIN_PDF_FORCE_FONT = $savedFont;
 
 		if ($result <= 0 || empty($this->result['fullpath'])) {
 			return $result;

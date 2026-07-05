@@ -47,7 +47,27 @@ class FacturxTcpdi extends TCPDI
 		$this->setExtraXMPRDF($this->facturxXmpRdf($m));
 	}
 
+	/**
+	 *  The fx:* values as an extra rdf:Description. The Factur-X *extension schema
+	 *  declaration* is NOT emitted here: TCPDF already writes its own
+	 *  pdfaExtension:schemas property and XMP forbids the same property twice on
+	 *  one subject — a second one makes veraPDF reject the whole XMP packet, lose
+	 *  pdfaid:part=3 and fall back to (failing) PDF/A-1 validation. The schema is
+	 *  merged into TCPDF's bag by the _putXMP() override below.
+	 */
 	private function facturxXmpRdf(array $m)
+	{
+		$enc = static function ($v) { return htmlspecialchars($v, ENT_XML1 | ENT_QUOTES, 'UTF-8'); };
+		return "\t\t".'<rdf:Description rdf:about="" xmlns:fx="'.$enc(self::FX_NS).'">'
+			.'<fx:DocumentType>'.$enc($m['documentType']).'</fx:DocumentType>'
+			.'<fx:DocumentFileName>'.$enc($m['documentFileName']).'</fx:DocumentFileName>'
+			.'<fx:Version>'.$enc($m['version']).'</fx:Version>'
+			.'<fx:ConformanceLevel>'.$enc($m['conformanceLevel']).'</fx:ConformanceLevel>'
+			.'</rdf:Description>'."\n";
+	}
+
+	/** Factur-X schema declaration as one rdf:li, indented like TCPDF's own items. */
+	private function facturxXmpSchemaLi()
 	{
 		$enc = static function ($v) { return htmlspecialchars($v, ENT_XML1 | ENT_QUOTES, 'UTF-8'); };
 		$props = array(
@@ -56,30 +76,91 @@ class FacturxTcpdi extends TCPDI
 			'Version'          => 'The actual version of the Factur-X XMP metadata schema',
 			'ConformanceLevel' => 'The conformance level of the embedded Factur-X data',
 		);
-		$seq = '';
+		$li = "\t\t\t\t\t".'<rdf:li rdf:parseType="Resource">'."\n"
+			."\t\t\t\t\t\t".'<pdfaSchema:namespaceURI>'.$enc(self::FX_NS).'</pdfaSchema:namespaceURI>'."\n"
+			."\t\t\t\t\t\t".'<pdfaSchema:prefix>fx</pdfaSchema:prefix>'."\n"
+			."\t\t\t\t\t\t".'<pdfaSchema:schema>Factur-X PDFA Extension Schema</pdfaSchema:schema>'."\n"
+			."\t\t\t\t\t\t".'<pdfaSchema:property>'."\n"
+			."\t\t\t\t\t\t\t".'<rdf:Seq>'."\n";
 		foreach ($props as $name => $desc) {
-			$seq .= '<rdf:li rdf:parseType="Resource">'
-				.'<pdfaProperty:name>'.$enc($name).'</pdfaProperty:name>'
-				.'<pdfaProperty:valueType>Text</pdfaProperty:valueType>'
-				.'<pdfaProperty:category>external</pdfaProperty:category>'
-				.'<pdfaProperty:description>'.$enc($desc).'</pdfaProperty:description>'
-				.'</rdf:li>';
+			$li .= "\t\t\t\t\t\t\t\t".'<rdf:li rdf:parseType="Resource">'."\n"
+				."\t\t\t\t\t\t\t\t\t".'<pdfaProperty:category>external</pdfaProperty:category>'."\n"
+				."\t\t\t\t\t\t\t\t\t".'<pdfaProperty:description>'.$enc($desc).'</pdfaProperty:description>'."\n"
+				."\t\t\t\t\t\t\t\t\t".'<pdfaProperty:name>'.$enc($name).'</pdfaProperty:name>'."\n"
+				."\t\t\t\t\t\t\t\t\t".'<pdfaProperty:valueType>Text</pdfaProperty:valueType>'."\n"
+				."\t\t\t\t\t\t\t\t".'</rdf:li>'."\n";
 		}
+		$li .= "\t\t\t\t\t\t\t".'</rdf:Seq>'."\n"
+			."\t\t\t\t\t\t".'</pdfaSchema:property>'."\n"
+			."\t\t\t\t\t".'</rdf:li>'."\n";
+		return $li;
+	}
 
-		return "\t\t".'<rdf:Description rdf:about="" xmlns:pdfaExtension="http://www.aiim.org/pdfa/ns/extension/" xmlns:pdfaSchema="http://www.aiim.org/pdfa/ns/schema#" xmlns:pdfaProperty="http://www.aiim.org/pdfa/ns/property#">'
-			.'<pdfaExtension:schemas><rdf:Bag><rdf:li rdf:parseType="Resource">'
-			.'<pdfaSchema:schema>Factur-X PDFA Extension Schema</pdfaSchema:schema>'
-			.'<pdfaSchema:namespaceURI>'.$enc(self::FX_NS).'</pdfaSchema:namespaceURI>'
-			.'<pdfaSchema:prefix>fx</pdfaSchema:prefix>'
-			.'<pdfaSchema:property><rdf:Seq>'.$seq.'</rdf:Seq></pdfaSchema:property>'
-			.'</rdf:li></rdf:Bag></pdfaExtension:schemas>'
-			.'</rdf:Description>'."\n"
-			."\t\t".'<rdf:Description rdf:about="" xmlns:fx="'.$enc(self::FX_NS).'">'
-			.'<fx:DocumentType>'.$enc($m['documentType']).'</fx:DocumentType>'
-			.'<fx:DocumentFileName>'.$enc($m['documentFileName']).'</fx:DocumentFileName>'
-			.'<fx:Version>'.$enc($m['version']).'</fx:Version>'
-			.'<fx:ConformanceLevel>'.$enc($m['conformanceLevel']).'</fx:ConformanceLevel>'
-			.'</rdf:Description>'."\n";
+	/**
+	 *  Splice the Factur-X schema declaration into TCPDF's single
+	 *  pdfaExtension:schemas bag. Buffer surgery is safe here: _putXMP() is the
+	 *  first thing _putcatalog() emits, and every later object records its xref
+	 *  offset after this method returns. The stream is plain (PDF/A forbids
+	 *  compressing the XMP), so only /Length must be re-stamped.
+	 */
+	protected function _putXMP()
+	{
+		$before = $this->bufferlen;
+		$oid = parent::_putXMP();
+
+		$li = $this->facturxXmpSchemaLi();
+		$anchor = "\t\t\t\t".'</rdf:Bag>'."\n"."\t\t\t".'</pdfaExtension:schemas>';
+		$tail = substr($this->buffer, $before);
+		$p = strpos($tail, $anchor);
+		if ($p === false) {
+			return $oid;
+		}
+		$tail = substr($tail, 0, $p).$li.substr($tail, $p);
+		$tail = preg_replace_callback(
+			'~/Length (\d+) >> stream~',
+			static function ($m) use ($li) {
+				return '/Length '.((int) $m[1] + strlen($li)).' >> stream';
+			},
+			$tail,
+			1
+		);
+		$this->buffer = substr($this->buffer, 0, $before).$tail;
+		$this->bufferlen = strlen($this->buffer);
+		return $oid;
+	}
+
+	/**
+	 *  Same as TCPDI's method, but guarantees an EOL before each 'endobj':
+	 *  pdf_write_value() ends dictionary objects on '>>' with no newline, which
+	 *  violates ISO 19005 6.1.8 ("endobj shall be preceded by an EOL marker").
+	 */
+	public function _putimportedobjects() // phpcs:ignore PSR2.Methods.MethodDeclaration.Underscore
+	{
+		if (is_array($this->parsers) && count($this->parsers) > 0) {
+			foreach ($this->parsers as $filename => $p) {
+				$this->current_parser = &$this->parsers[$filename];
+				if (isset($this->_obj_stack[$filename]) && is_array($this->_obj_stack[$filename])) {
+					while (($n = key($this->_obj_stack[$filename])) !== null) {
+						$nObj = $this->current_parser->getObjectVal($this->_obj_stack[$filename][$n][1]);
+						$this->_newobj($this->_obj_stack[$filename][$n][0]);
+						if ($nObj[0] == PDF_TYPE_STREAM) {
+							$this->pdf_write_value($nObj);
+						} else {
+							$this->pdf_write_value($nObj[1]);
+						}
+						if (substr($this->buffer, -1) !== "\n") {
+							$this->_out('');
+						}
+						$this->_out('endobj');
+						$this->_obj_stack[$filename][$n] = null;
+						unset($this->_obj_stack[$filename][$n]);
+						reset($this->_obj_stack[$filename]);
+					}
+				}
+				$this->current_parser->cleanUp();
+				unset($this->parsers[$filename]);
+			}
+		}
 	}
 
 	protected function _putEmbeddedFiles()

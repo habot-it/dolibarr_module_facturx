@@ -4,3 +4,24 @@ ModuleFacturXDesc = Generate customer invoices in Factur-X format (PDF/A-3 with 
 FacturXDescription = Generate customer invoices in Factur-X format
 FacturXDescriptionLong = Adds a PDF template for customer invoices that produces a Factur-X compliant PDF/A-3 with embedded CII XML (EXTENDED profile).
 PDFFacturxTemplate = Factur-X invoice template (PDF/A-3 + CII EXTENDED XML)
+
+# Setup page
+FacturXSetup = Factur-X module setup
+FacturXSetupPageHelp = These settings feed the structured CII XML embedded in the Factur-X PDFs. They do not change the visual PDF: the footer is still driven by the free text under Invoices → Setup.
+FacturXNotesTitle = French legal mentions (coded notes, BT-22)
+FacturXNotesHelp = Notes required by the FNFE/CIUS-FR checks (rule BR-FR-05, one note per code — BR-FR-06). Only emitted when the selling company is French. Leave a field empty to use the default text shown greyed out.
+FacturXNotePMD = Late-payment penalties (code PMD)
+FacturXNotePMDHelp = Penalty rate applicable in case of late payment.
+FacturXNotePMT = Recovery cost indemnity (code PMT)
+FacturXNotePMTHelp = Fixed 40 € indemnity due on late payment (B2B).
+FacturXNoteAAB = Early-payment discount (code AAB)
+FacturXNoteAABHelp = Discount terms for early payment, or the absence of any discount.
+FacturXNoteTXD = Single VAT group (code TXD)
+FacturXNoteTXDHelp = Only if your company belongs to a single VAT group. Empty = note not emitted.
+FacturXNoteNoDefault = (no default — empty means the note is not emitted)
+FacturXEndpointTitle = Seller electronic address (BT-34)
+FacturXEndpointHelp = Routing identifier used by the platform directory (French 2026 reform). Default: your SIREN with scheme 0225. The buyer address (BT-49) is derived automatically from the thirdparty card (SIREN, else e-mail).
+FacturXSellerEndpointId = Electronic address value
+FacturXSellerEndpointIdHelp = Empty = company SIREN (greyed out). Set e.g. SIREN_XXXX to append a routing code.
+FacturXSellerEndpointScheme = Scheme identifier (schemeID)
+FacturXSellerEndpointSchemeHelp = Empty = 0225 (SIREN, French reform). Use EM for an e-mail address.

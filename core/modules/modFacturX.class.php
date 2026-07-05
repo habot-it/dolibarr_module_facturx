@@ -51,7 +51,7 @@ class modFacturX extends DolibarrModules
 		$this->editor_name = 'HABOT IT';
 		$this->editor_url = 'www.habot.it';
 
-		$this->version = '1.0.0';
+		$this->version = '1.1.0';
 		$this->const_name = 'MAIN_MODULE_'.strtoupper($this->name);
 		$this->picto = 'fa-file-invoice';
 
@@ -60,7 +60,7 @@ class modFacturX extends DolibarrModules
 		);
 
 		$this->dirs = array();
-		$this->config_page_url = array();
+		$this->config_page_url = array("setup.php@facturx");
 
 		$this->hidden = getDolGlobalInt('MODULE_FACTURX_DISABLED');
 		$this->depends = array('modFacture');
