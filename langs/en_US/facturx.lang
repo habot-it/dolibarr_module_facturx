@@ -5,6 +5,15 @@ FacturXDescription = Generate customer invoices in Factur-X format
 FacturXDescriptionLong = Adds a PDF template for customer invoices that produces a Factur-X compliant PDF/A-3 with embedded CII XML (EXTENDED profile).
 PDFFacturxTemplate = Factur-X invoice template (PDF/A-3 + CII EXTENDED XML)
 
+# Thirdparty extra attributes
+FacturXAddressFormat = Electronic address format
+FacturXAddressFormatHelp = Structure of the thirdparty electronic invoicing address (BT-49, scheme 0225). Empty = the legal entity is addressed (SIREN only). The SIREN and SIRET are taken from the card automatically: only the optional routing code is entered below. Use the exact format the customer declared in the directory.
+FacturXFormatSirenSiret = SIREN_SIRET
+FacturXFormatSirenSiretCode = SIREN_SIRET_CODE
+FacturXFormatSirenCode = SIREN_CODE
+FacturXRoutingCode = Electronic routing code
+FacturXRoutingCodeHelp = Code (or suffix) given by the customer, only used with the SIREN_SIRET_CODE and SIREN_CODE formats. Do not enter the SIREN or the SIRET here: they come from the professional ids of the card.
+
 # Setup page
 FacturXSetup = Factur-X module setup
 FacturXSetupPageHelp = These settings feed the structured CII XML embedded in the Factur-X PDFs. They do not change the visual PDF: the footer is still driven by the free text under Invoices → Setup.

@@ -4,6 +4,24 @@ All notable changes to this module are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-08-03
+
+### Added
+
+- Buyer electronic address (BT-49) can now target an establishment or a service,
+  through two thirdparty extra attributes created at module activation:
+  **`facturx_address_format`** (list: `SIREN_SIRET`, `SIREN_SIRET_CODE`,
+  `SIREN_CODE`) and **`facturx_routing_code`**. The SIREN and SIRET are never
+  retyped — they are read from the professional ids of the card — so only the
+  optional routing code is entered. An empty format keeps the previous behaviour
+  (SIREN alone, legal entity). Each branch degrades to a still-valid address
+  when a part is missing, and a whole address pasted into the routing code field
+  is accepted as-is. Both attributes are kept when the module is disabled, so
+  what the user entered is never lost.
+- Routing codes are filtered per AIFE rule G1.115 (digits, unaccented latin
+  letters and `-`, `_`, `.`), so a stray character never ends up in an address
+  the directory would reject.
+
 ## [1.1.0] - 2026-07-05
 
 ### Fixed

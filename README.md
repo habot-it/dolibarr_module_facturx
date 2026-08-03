@@ -63,6 +63,16 @@ validator:
   professional id 1, or derived from the SIRET); other parties fall back to
   their e-mail address (EAS `EM`). The seller value and scheme can be changed
   on the module **setup page** (e.g. `123456789_0001` to append a routing code).
+- **Buyer addressed at establishment or service level.** Customers often publish
+  one address per establishment, all sharing the same SIREN. Set the
+  **Electronic address format** on the thirdparty card (extra attribute added by
+  the module) to `SIREN_SIRET`, `SIREN_SIRET_CODE` or `SIREN_CODE`, and fill the
+  **Electronic routing code** only for the last two. The SIREN and SIRET are
+  taken from the professional ids of the card, so they are never retyped; an
+  empty format addresses the legal entity (SIREN alone). Use the format the
+  customer declared in the directory rather than guessing: an address unknown to
+  the directory is misrouted or rejected, and the Factur-X validators — which
+  only check syntax — cannot detect it.
 - **Coded legal mentions (BT-22, rules BR-FR-05/06).** Late-payment penalties
   (`PMD`), the 40 € recovery indemnity (`PMT`) and the discount policy (`AAB`)
   are emitted with standard French defaults when the selling company is French.

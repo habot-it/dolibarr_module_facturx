@@ -318,18 +318,70 @@ class FacturxXml
 		}
 		if (strtoupper((string) ($party->country_code ?? '')) === 'FR') {
 			$siren = preg_replace('/\D/', '', (string) ($party->idprof1 ?? ''));
-			if (strlen($siren) === 9) {
-				return array('0225', $siren);
+			if (strlen($siren) !== 9) {
+				$siret = preg_replace('/\D/', '', (string) ($party->idprof2 ?? ''));
+				$siren = (strlen($siret) === 14) ? substr($siret, 0, 9) : '';
 			}
-			$siret = preg_replace('/\D/', '', (string) ($party->idprof2 ?? ''));
-			if (strlen($siret) === 14) {
-				return array('0225', substr($siret, 0, 9));
+			if ($siren !== '') {
+				return array('0225', $this->routedAddress($party, $siren));
 			}
 		}
 		if (!empty($party->email)) {
 			return array('EM', (string) $party->email);
 		}
 		return null;
+	}
+
+	/**
+	 *  Build the party electronic address from the addressing format chosen on
+	 *  its card. The SIREN and SIRET are never retyped — they come from the
+	 *  standard professional ids — so only the optional routing code is stored
+	 *  on the thirdparty:
+	 *
+	 *   - no format          => SIREN                    (legal entity)
+	 *   - SIREN_SIRET        => SIREN_SIRET              (one establishment)
+	 *   - SIREN_SIRET_CODE   => SIREN_SIRET_<code>       (service of one establishment)
+	 *   - SIREN_CODE         => SIREN_<code>             (free suffix)
+	 *
+	 *  Every branch degrades to a still-valid address when a part is missing
+	 *  (no SIRET on the card, empty routing code).
+	 *
+	 *  @param  Societe	$party  Party to address
+	 *  @param  string	$siren  Nine-digit SIREN, already validated
+	 *  @return string          Electronic address for scheme 0225
+	 */
+	private function routedAddress($party, $siren)
+	{
+		$options = isset($party->array_options) && is_array($party->array_options) ? $party->array_options : array();
+
+		// An unselected Dolibarr select posts '0', which means "no format" here.
+		$format = (string) ($options['options_facturx_address_format'] ?? '');
+		if ($format === '' || $format === '0') {
+			return $siren;
+		}
+
+		// AIFE rule G1.115: a suffix accepts only digits, unaccented latin letters
+		// and "-", "_", "." — anything else is dropped rather than shipped in an
+		// address the directory would reject.
+		$code = preg_replace('/[^0-9A-Za-z._-]/', '', (string) ($options['options_facturx_routing_code'] ?? ''));
+		$code = trim($code, '_');
+		// Tolerate a whole address pasted into the routing code field. The
+		// separator matters: a SIRET also starts with the SIREN.
+		if ($code !== '' && strpos($code, $siren.'_') === 0) {
+			return $code;
+		}
+
+		$parts = array($siren);
+		if ($format === 'SIREN_SIRET' || $format === 'SIREN_SIRET_CODE') {
+			$siret = preg_replace('/\D/', '', (string) ($party->idprof2 ?? ''));
+			if (strlen($siret) === 14) {
+				$parts[] = $siret;
+			}
+		}
+		if ($code !== '' && ($format === 'SIREN_SIRET_CODE' || $format === 'SIREN_CODE')) {
+			$parts[] = $code;
+		}
+		return implode('_', $parts);
 	}
 
 	private function buildContact($party)

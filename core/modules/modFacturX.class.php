@@ -51,7 +51,7 @@ class modFacturX extends DolibarrModules
 		$this->editor_name = 'HABOT IT';
 		$this->editor_url = 'www.habot.it';
 
-		$this->version = '1.1.0';
+		$this->version = '1.2.0';
 		$this->const_name = 'MAIN_MODULE_'.strtoupper($this->name);
 		$this->picto = 'fa-file-invoice';
 
@@ -100,7 +100,78 @@ class modFacturX extends DolibarrModules
 			"INSERT INTO ".$this->db->prefix()."document_model (nom, type, entity) VALUES('facturx', 'invoice', ".((int) $conf->entity).")",
 		);
 
+		$this->createExtraFields();
+
 		return $this->_init($sql, $options);
+	}
+
+	/**
+	 * Create the thirdparty extra attributes describing the buyer electronic
+	 * address (BT-49): the addressing format, and the routing code it may need.
+	 * The SIREN and SIRET themselves are not duplicated here — they are read
+	 * from the standard professional ids of the thirdparty.
+	 *
+	 * Idempotent, and deliberately not undone by remove(): dropping the columns
+	 * would discard what the user entered.
+	 *
+	 * @return void
+	 */
+	private function createExtraFields()
+	{
+		global $conf;
+
+		require_once DOL_DOCUMENT_ROOT.'/core/class/extrafields.class.php';
+
+		$extrafields = new ExtraFields($this->db);
+		$extrafields->fetch_name_optionals_label('societe');
+
+		$fields = array(
+			'facturx_address_format' => array(
+				'label' => 'FacturXAddressFormat',
+				'type'  => 'select',
+				'pos'   => 100,
+				'size'  => '',
+				'help'  => 'FacturXAddressFormatHelp',
+				'param' => array('options' => array(
+					'SIREN_SIRET'      => 'FacturXFormatSirenSiret',
+					'SIREN_SIRET_CODE' => 'FacturXFormatSirenSiretCode',
+					'SIREN_CODE'       => 'FacturXFormatSirenCode',
+				)),
+			),
+			'facturx_routing_code' => array(
+				'label' => 'FacturXRoutingCode',
+				'type'  => 'varchar',
+				'pos'   => 101,
+				'size'  => '64',
+				'help'  => 'FacturXRoutingCodeHelp',
+				'param' => '',
+			),
+		);
+
+		foreach ($fields as $name => $def) {
+			if (isset($extrafields->attributes['societe']['label'][$name])) {
+				continue;
+			}
+			$extrafields->addExtraField(
+				$name,
+				$def['label'],
+				$def['type'],
+				$def['pos'],
+				$def['size'],
+				'societe',
+				0,
+				0,
+				'',
+				$def['param'],
+				1,
+				'',
+				'1',
+				$def['help'],
+				'',
+				(string) $conf->entity,
+				'facturx@facturx'
+			);
+		}
 	}
 
 	/**

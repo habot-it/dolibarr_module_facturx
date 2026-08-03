@@ -5,6 +5,15 @@ FacturXDescription = Génération de factures au format Factur-X
 FacturXDescriptionLong = Ajoute un modèle PDF pour les factures clients qui produit un PDF/A-3 conforme Factur-X avec XML CII embarqué (profil EXTENDED).
 PDFFacturxTemplate = Modèle de facture au format Factur-X (PDF/A-3 + XML CII EXTENDED)
 
+# Thirdparty extra attributes
+FacturXAddressFormat = Format d'adresse électronique
+FacturXAddressFormatHelp = Structure de l'adresse électronique de facturation du tiers (BT-49, schéma 0225). Vide = adressage de l'entité légale (SIREN seul). Le SIREN et le SIRET sont repris automatiquement de la fiche : seul le code de routage éventuel est à saisir ci-dessous. Reprendre le format exact déclaré par le client dans l'annuaire.
+FacturXFormatSirenSiret = SIREN_SIRET
+FacturXFormatSirenSiretCode = SIREN_SIRET_CODE
+FacturXFormatSirenCode = SIREN_CODE
+FacturXRoutingCode = Code de routage électronique
+FacturXRoutingCodeHelp = Code (ou suffixe) communiqué par le client, utilisé uniquement avec les formats SIREN_SIRET_CODE et SIREN_CODE. Ne pas y saisir le SIREN ni le SIRET : ils proviennent des identifiants professionnels de la fiche.
+
 # Setup page
 FacturXSetup = Configuration du module Factur-X
 FacturXSetupPageHelp = Ces réglages alimentent le XML structuré (CII) embarqué dans les PDF Factur-X. Ils ne modifient pas le rendu visuel du PDF : le pied de page reste géré par le texte libre de Facturation → Configuration.
