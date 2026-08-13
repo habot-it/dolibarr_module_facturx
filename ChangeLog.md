@@ -4,6 +4,21 @@ All notable changes to this module are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.1] - 2026-08-13
+
+### Fixed
+
+- `Factur-X embedding failed: Call to undefined method
+  FacturxTcpdi::getCachedFileContents()` on installations whose bundled TCPDF
+  predates that helper (it is only a memoizing wrapper around
+  `TCPDF_STATIC::fileGetContents`). The attachment is now read through whichever
+  API the bundled TCPDF offers, falling back to `file_get_contents()`.
+- The Factur-X XMP schema was spliced in by matching TCPDF's exact indentation,
+  and a miss was ignored silently — which would have produced a PDF without the
+  `fx:` schema declaration, i.e. not Factur-X, with no error shown. The anchor is
+  now whitespace-tolerant and an unexpected TCPDF layout raises a clear error
+  instead.
+
 ## [1.2.0] - 2026-08-03
 
 ### Added

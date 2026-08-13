@@ -109,12 +109,14 @@ class FacturxTcpdi extends TCPDI
 		$oid = parent::_putXMP();
 
 		$li = $this->facturxXmpSchemaLi();
-		$anchor = "\t\t\t\t".'</rdf:Bag>'."\n"."\t\t\t".'</pdfaExtension:schemas>';
 		$tail = substr($this->buffer, $before);
-		$p = strpos($tail, $anchor);
-		if ($p === false) {
-			return $oid;
+		// Whitespace-tolerant anchor: TCPDF's own indentation has changed between
+		// releases. Without the splice the fx: schema is undeclared and the PDF is
+		// not Factur-X, so a miss must fail loudly rather than ship a silent dud.
+		if (!preg_match('~[ \t]*</rdf:Bag>[ \t]*\r?\n[ \t]*</pdfaExtension:schemas>~', $tail, $m, PREG_OFFSET_CAPTURE)) {
+			throw new \RuntimeException('Cannot locate the pdfaExtension:schemas bag in the XMP produced by TCPDF '.(defined('TCPDF_VERSION') ? TCPDF_VERSION : '?').'; Factur-X metadata would be missing.');
 		}
+		$p = $m[0][1];
 		$tail = substr($tail, 0, $p).$li.substr($tail, $p);
 		$tail = preg_replace_callback(
 			'~/Length (\d+) >> stream~',
@@ -163,13 +165,33 @@ class FacturxTcpdi extends TCPDI
 		}
 	}
 
+	/**
+	 *  Read an attachment, whatever the bundled TCPDF version offers.
+	 *  getCachedFileContents() only appeared in recent TCPDF releases (it is a
+	 *  memoizing wrapper around TCPDF_STATIC::fileGetContents), and calling it
+	 *  blindly fatals on the TCPDF shipped with older Dolibarr versions.
+	 *
+	 *  @param  string       $file  Path of the file to embed
+	 *  @return string|false        File contents, or false when unreadable
+	 */
+	private function readEmbeddedFile($file)
+	{
+		if (method_exists($this, 'getCachedFileContents')) {
+			return $this->getCachedFileContents($file);
+		}
+		if (class_exists('TCPDF_STATIC') && method_exists('TCPDF_STATIC', 'fileGetContents')) {
+			return TCPDF_STATIC::fileGetContents($file);
+		}
+		return @file_get_contents($file);
+	}
+
 	protected function _putEmbeddedFiles()
 	{
 		if ($this->pdfa_mode && $this->pdfa_version != 3) {
 			return; // Embedded files forbidden in PDF/A-1 and PDF/A-2
 		}
 		foreach ($this->embeddedfiles as $filename => $fd) {
-			$raw = $this->getCachedFileContents($fd['file']);
+			$raw = $this->readEmbeddedFile($fd['file']);
 			if ($raw === false || $raw === '') {
 				continue;
 			}
