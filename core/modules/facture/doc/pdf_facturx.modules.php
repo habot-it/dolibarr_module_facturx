@@ -46,7 +46,7 @@ class pdf_facturx extends pdf_sponge
 
 	protected function _pagehead(&$pdf, $object, $showaddress, $outputlangs, $outputlangsbis = null)
 	{
-		parent::_pagehead($pdf, $object, $showaddress, $outputlangs, $outputlangsbis);
+		$ret = parent::_pagehead($pdf, $object, $showaddress, $outputlangs, $outputlangsbis);
 		if ($pdf->getPage() == 1 && $this->facturxLogoPath && is_readable($this->facturxLogoPath)) {
 			// Place the logo immediately to the right of the "Facture FA…" title,
 			// in the right-margin strip. Sponge draws the title right-aligned at
@@ -58,6 +58,8 @@ class pdf_facturx extends pdf_sponge
 			$y = $pad;
 			$pdf->Image($this->facturxLogoPath, $x, $y, $w, 0, 'PNG');
 		}
+		// Sponge reads top_shift/shipp_shift from this return value to lay out the page.
+		return $ret;
 	}
 
 	// phpcs:disable PEAR.NamingConventions.ValidFunctionName.ScopeNotCamelCaps
@@ -71,11 +73,13 @@ class pdf_facturx extends pdf_sponge
 
 		// PDF/A requires every font used in the page content to be embedded; the
 		// default Helvetica is a non-embedded core font. Sponge honours
-		// MAIN_PDF_FORCE_FONT, so point it at an embeddable TrueType (DejaVu is
-		// bundled with Dolibarr's TCPDF) unless the user already forces a font.
+		// MAIN_PDF_FORCE_FONT, so point it at TCPDF's embeddable pdfahelvetica
+		// unless the user already forces a font. It keeps Helvetica's metrics, so
+		// the layout matches sponge's; wider fonts (e.g. DejaVu Sans) push the
+		// totals block onto a second page.
 		$savedFont = getDolGlobalString('MAIN_PDF_FORCE_FONT');
 		if ($savedFont === '') {
-			$conf->global->MAIN_PDF_FORCE_FONT = getDolGlobalString('FACTURX_PDF_FONT', 'dejavusans');
+			$conf->global->MAIN_PDF_FORCE_FONT = getDolGlobalString('FACTURX_PDF_FONT', 'pdfahelvetica');
 		}
 
 		$result = parent::write_file($object, $outputlangs, $srctemplatepath, $hidedetails, $hidedesc, $hideref);
@@ -134,8 +138,9 @@ class pdf_facturx extends pdf_sponge
 			}
 
 			foreach ($invoiceTpls as $tpl) {
+				// TCPDI's fpdf_tpl returns array('w' => ..., 'h' => ...), not FPDI 2's keys.
 				$size = $pdf->getTemplateSize($tpl);
-				$pdf->AddPage($size['orientation'], array($size['width'], $size['height']));
+				$pdf->AddPage($size['w'] > $size['h'] ? 'L' : 'P', array($size['w'], $size['h']));
 				if ($bgTpl !== null) {
 					$pdf->useTemplate($bgTpl);
 				}

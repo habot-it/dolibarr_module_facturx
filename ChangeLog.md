@@ -4,6 +4,18 @@ All notable changes to this module are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.2] - 2026-10-08
+
+### Fixed
+
+- Invoices that fit on one page with `sponge` came out on two pages. The
+  default embedded font is now `pdfahelvetica` (Helvetica metrics) instead of
+  the wider DejaVu Sans, which pushed the totals block onto a second page.
+- The `_pagehead()` override dropped the parent's return value, so sponge lost
+  its `top_shift`/`shipp_shift` layout offsets.
+- The PDF/A-3 re-wrap read FPDI 2 keys from TCPDI's `getTemplateSize()` (which
+  returns `w`/`h`), creating pages with an undefined size.
+
 ## [1.2.1] - 2026-08-13
 
 ### Fixed

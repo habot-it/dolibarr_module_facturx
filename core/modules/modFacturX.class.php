@@ -51,7 +51,7 @@ class modFacturX extends DolibarrModules
 		$this->editor_name = 'HABOT IT';
 		$this->editor_url = 'www.habot.it';
 
-		$this->version = '1.2.1';
+		$this->version = '1.2.2';
 		$this->const_name = 'MAIN_MODULE_'.strtoupper($this->name);
 		$this->picto = 'fa-file-invoice';
 

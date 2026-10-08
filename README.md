@@ -102,8 +102,9 @@ consistent.
 - The setup page only covers the French mentions and the seller electronic
   address. Conformance level, XML filename and `/AFRelationship` value are
   still set in code (see `pdf_facturx.modules.php`).
-- PDF/A requires embedded fonts, so the layout is rendered with DejaVu Sans
-  instead of the (non-embeddable) Helvetica default. Set `FACTURX_PDF_FONT` to
+- PDF/A requires embedded fonts, so the layout is rendered with TCPDF's
+  embeddable `pdfahelvetica` instead of the (non-embeddable) Helvetica default;
+  it has the same metrics, so the page layout matches the `sponge` template. Set `FACTURX_PDF_FONT` to
   another TCPDF font name, or define `MAIN_PDF_FORCE_FONT` globally to take
   precedence. If you use `MAIN_ADD_PDF_BACKGROUND`, make sure the background
   PDF itself has its fonts embedded (or converted to outlines).
