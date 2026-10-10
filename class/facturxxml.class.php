@@ -496,7 +496,18 @@ class FacturxXml
 		foreach ((array) $inv->lines as $l) {
 			$linesHT += (float) $l->total_ht;
 		}
-		$paid = method_exists($inv, 'getSommePaiement') ? (float) $inv->getSommePaiement() : 0.0;
+		$paid = 0.0;
+		// Match Sponge: payment-side deposits and credits also reduce the balance.
+		foreach (array('getSommePaiement', 'getSumDepositsUsed', 'getSumCreditNotesUsed') as $method) {
+			if (!method_exists($inv, $method)) {
+				continue;
+			}
+			$amount = $inv->$method();
+			if ($amount === -1 || ($amount !== null && !is_numeric($amount))) {
+				throw new RuntimeException('Cannot read invoice settlement: '.$method);
+			}
+			$paid += (float) $amount;
+		}
 		$sum->appendChild($this->amount('ram:LineTotalAmount', $linesHT));
 		$sum->appendChild($this->amount('ram:TaxBasisTotalAmount', (float) $inv->total_ht));
 		$taxTotal = $sum->appendChild($this->amount('ram:TaxTotalAmount', (float) $inv->total_tva));
