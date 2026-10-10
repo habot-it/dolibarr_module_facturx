@@ -64,6 +64,7 @@ $action = GETPOST('action', 'aZ09');
 // Constant name => GETPOST filter. Empty value removes the constant so the
 // code falls back to its built-in default.
 $params = array(
+	'FACTURX_HIDE_PDF_LOGO' => 'int',
 	'FACTURX_NOTE_PMD' => 'alphanohtml',
 	'FACTURX_NOTE_PMT' => 'alphanohtml',
 	'FACTURX_NOTE_AAB' => 'alphanohtml',
@@ -117,6 +118,9 @@ print '<span class="opacitymedium">'.$langs->trans('FacturXSetupPageHelp').'</sp
 print '<form method="POST" action="'.$_SERVER['PHP_SELF'].'">';
 print '<input type="hidden" name="token" value="'.newToken().'">';
 print '<input type="hidden" name="action" value="update">';
+
+print '<label><input type="checkbox" name="FACTURX_HIDE_PDF_LOGO" value="1"'.(getDolGlobalInt('FACTURX_HIDE_PDF_LOGO') ? ' checked' : '').'> '.$langs->trans('FacturXHidePdfLogo').'</label>';
+print '<br><span class="opacitymedium small">'.$langs->trans('FacturXHidePdfLogoHelp').'</span><br><br>';
 
 // --- French coded notes (BR-FR-05/06) ---
 print load_fiche_titre($langs->trans('FacturXNotesTitle'), '', '');

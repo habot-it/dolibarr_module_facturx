@@ -47,7 +47,7 @@ class pdf_facturx extends pdf_sponge
 	protected function _pagehead(&$pdf, $object, $showaddress, $outputlangs, $outputlangsbis = null)
 	{
 		$ret = parent::_pagehead($pdf, $object, $showaddress, $outputlangs, $outputlangsbis);
-		if ($pdf->getPage() == 1 && $this->facturxLogoPath && is_readable($this->facturxLogoPath)) {
+		if (!getDolGlobalInt('FACTURX_HIDE_PDF_LOGO') && $pdf->getPage() == 1 && $this->facturxLogoPath && is_readable($this->facturxLogoPath)) {
 			// Place the logo immediately to the right of the "Facture FA…" title,
 			// in the right-margin strip. Sponge draws the title right-aligned at
 			// x = page_largeur - marge_droite, so starting our icon just past it

@@ -16,7 +16,9 @@ FacturXRoutingCodeHelp = Code (or suffix) given by the customer, only used with 
 
 # Setup page
 FacturXSetup = Factur-X module setup
-FacturXSetupPageHelp = These settings feed the structured CII XML embedded in the Factur-X PDFs. They do not change the visual PDF: the footer is still driven by the free text under Invoices → Setup.
+FacturXSetupPageHelp = Configure the visible PDF logo and the structured CII XML embedded in the Factur-X PDFs. The footer is still driven by the free text under Invoices → Setup.
+FacturXHidePdfLogo = Hide the Factur-X logo on invoices
+FacturXHidePdfLogoHelp = The logo is shown by default. Hiding it only changes the visible PDF; the embedded XML and PDF/A-3 metadata are unchanged. Regenerate existing PDFs to apply this setting.
 FacturXNotesTitle = French legal mentions (coded notes, BT-22)
 FacturXNotesHelp = Notes required by the FNFE/CIUS-FR checks (rule BR-FR-05, one note per code — BR-FR-06). Only emitted when the selling company is French. Leave a field empty to use the default text shown greyed out.
 FacturXNotePMD = Late-payment penalties (code PMD)
