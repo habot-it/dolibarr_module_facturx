@@ -53,6 +53,16 @@ Generate a customer invoice PDF as usual. The resulting file is a PDF/A-3 with
 `factur-x.xml` attached. Tools such as FNFE-MPE's validator, Chorus Pro and most
 Factur-X readers will pick up the embedded invoice data automatically.
 
+## German Kleinunternehmer (§ 19 UStG)
+
+Enable **German Kleinunternehmer exemption** on the module setup page only when
+§ 19 UStG applies. This stores `FACTURX_GERMAN_KLEINUNTERNEHMER=1`. For a German
+seller explicitly configured as not subject to VAT, zero-rate lines, tax summaries
+and document allowances use category `E`; the summary includes the § 19 exemption
+reason. Positive VAT rates retain `S`; without this opt-in zero-rated amounts retain
+`Z`. Keep the visible invoice footer's § 19 wording consistent. Other exemptions
+are not inferred from the non-VAT setting.
+
 ## French mandatory data (BR-FR rules)
 
 Since 1.1.0 the XML carries the French CTC data checked by the FNFE-MPE
@@ -99,9 +109,9 @@ consistent.
 - Invoice `TypeCode` mapping covers standard (380), credit note (381),
   deposit (386) and proforma (325). Situation invoices (Dolibarr type 5) fall
   back to 380.
-- The setup page only covers the French mentions and the seller electronic
-  address. Conformance level, XML filename and `/AFRelationship` value are
-  still set in code (see `pdf_facturx.modules.php`).
+- The setup page covers the French mentions, German Kleinunternehmer exemption
+  and the seller electronic address. Conformance level, XML filename and
+  `/AFRelationship` value are still set in code (see `pdf_facturx.modules.php`).
 - PDF/A requires embedded fonts, so the layout is rendered with TCPDF's
   embeddable `pdfahelvetica` instead of the (non-embeddable) Helvetica default;
   it has the same metrics, so the page layout matches the `sponge` template. Set `FACTURX_PDF_FONT` to

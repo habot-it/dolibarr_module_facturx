@@ -34,3 +34,6 @@ FacturXSellerEndpointId = Electronic address value
 FacturXSellerEndpointIdHelp = Empty = company SIREN (greyed out). Set e.g. SIREN_XXXX to append a routing code.
 FacturXSellerEndpointScheme = Scheme identifier (schemeID)
 FacturXSellerEndpointSchemeHelp = Empty = 0225 (SIREN, French reform). Use EM for an e-mail address.
+
+FacturXGermanKleinunternehmer = German Kleinunternehmer exemption (§ 19 UStG)
+FacturXGermanKleinunternehmerHelp = Enable only for a German seller applying § 19 UStG. Zero-rate lines use VAT category E with the exemption reason only when the seller is German and not subject to VAT. Keep the visible PDF footer consistent.
