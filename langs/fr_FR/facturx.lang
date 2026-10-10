@@ -34,3 +34,6 @@ FacturXSellerEndpointId = Valeur de l'adresse électronique
 FacturXSellerEndpointIdHelp = Vide = SIREN de la société (grisé). Renseignez par exemple SIREN_XXXX pour ajouter un code routage.
 FacturXSellerEndpointScheme = Schéma d'identification (schemeID)
 FacturXSellerEndpointSchemeHelp = Vide = 0225 (SIREN, réforme française). Utilisez EM pour une adresse e-mail.
+
+FacturXGermanKleinunternehmer = Exonération allemande Kleinunternehmer (§ 19 UStG)
+FacturXGermanKleinunternehmerHelp = Activer uniquement pour un vendeur allemand relevant du § 19 UStG. Les lignes à taux zéro utilisent la catégorie E et le motif d’exonération si le vendeur est allemand et non assujetti à la TVA. Conserver une mention cohérente dans le pied de page PDF.

@@ -19,6 +19,8 @@
  */
 class FacturxXml
 {
+	const GERMAN_KU_REASON = 'Steuerbefreiung für Kleinunternehmer gemäß § 19 UStG.';
+
 	const GUIDELINE_EXTENDED = 'urn:cen.eu:en16931:2017#conformant#urn:factur-x.eu:1p0:extended';
 
 	const NS_RSM = 'urn:un:unece:uncefact:data:standard:CrossIndustryInvoice:100';
@@ -266,12 +268,16 @@ class FacturxXml
 	private function buildParty($tag, $party)
 	{
 		$el = $this->el($tag);
+		$country = strtoupper((string) ($party->country_code ?? ''));
+		if ($tag === 'ram:SellerTradeParty' && $country === 'DE' && !empty($party->idprof1)) {
+			$el->appendChild($this->el('ram:ID', (string) $party->idprof1));
+		}
 		$el->appendChild($this->el('ram:Name', (string) ($party->name ?? '')));
-
-		if (!empty($party->idprof1)) {
+		// German professional ID 1 is the tax number; ID 3 is the commercial register.
+		$legalId = $country === 'DE' ? ($party->idprof3 ?? '') : ($party->idprof1 ?? '');
+		if (!empty($legalId)) {
 			$legal = $el->appendChild($this->el('ram:SpecifiedLegalOrganization'));
-			$id = $legal->appendChild($this->el('ram:ID', (string) $party->idprof1));
-			$country = strtoupper((string) ($party->country_code ?? ''));
+			$id = $legal->appendChild($this->el('ram:ID', (string) $legalId));
 			if (isset(self::$legalSchemeMap[$country])) {
 				$id->setAttribute('schemeID', self::$legalSchemeMap[$country]);
 			}
@@ -290,6 +296,12 @@ class FacturxXml
 			$uri = $el->appendChild($this->el('ram:URIUniversalCommunication'));
 			$id = $uri->appendChild($this->el('ram:URIID', $endpoint[1]));
 			$id->setAttribute('schemeID', $endpoint[0]);
+		}
+
+		if ($country === 'DE' && !empty($party->idprof1)) {
+			$reg = $el->appendChild($this->el('ram:SpecifiedTaxRegistration'));
+			$id = $reg->appendChild($this->el('ram:ID', (string) $party->idprof1));
+			$id->setAttribute('schemeID', 'FC');
 		}
 
 		if (!empty($party->tva_intra)) {
@@ -470,8 +482,11 @@ class FacturxXml
 			$t = $s->appendChild($this->el('ram:ApplicableTradeTax'));
 			$t->appendChild($this->amount('ram:CalculatedAmount', $amounts['vat']));
 			$t->appendChild($this->el('ram:TypeCode', 'VAT'));
+			if ($this->taxCategory((float) $rate) === 'E') {
+				$t->appendChild($this->el('ram:ExemptionReason', self::GERMAN_KU_REASON));
+			}
 			$t->appendChild($this->amount('ram:BasisAmount', $amounts['base']));
-			$t->appendChild($this->el('ram:CategoryCode', $rate > 0 ? 'S' : 'Z'));
+			$t->appendChild($this->el('ram:CategoryCode', $this->taxCategory((float) $rate)));
 			$t->appendChild($this->el('ram:RateApplicablePercent', $this->num((float) $rate)));
 		}
 
@@ -579,7 +594,10 @@ class FacturxXml
 
 		$t = $a->appendChild($this->el('ram:CategoryTradeTax'));
 		$t->appendChild($this->el('ram:TypeCode', 'VAT'));
-		$t->appendChild($this->el('ram:CategoryCode', 'S'));
+		if ($this->taxCategory($dominantRate) === 'E') {
+			$t->appendChild($this->el('ram:ExemptionReason', self::GERMAN_KU_REASON));
+		}
+		$t->appendChild($this->el('ram:CategoryCode', $this->taxCategory($dominantRate)));
 		$t->appendChild($this->el('ram:RateApplicablePercent', $this->num($dominantRate)));
 		return $a;
 	}
@@ -649,11 +667,29 @@ class FacturxXml
 		return 'C62';
 	}
 
+	/** § 19 requires an explicit opt-in: non-VAT sellers can have other exemptions. */
+	private function taxCategory($rate)
+	{
+		global $mysoc;
+		if ($rate > 0) {
+			return 'S';
+		}
+		if (getDolGlobalString('FACTURX_GERMAN_KLEINUNTERNEHMER') === '1'
+			&& strtoupper((string) ($mysoc->country_code ?? '')) === 'DE'
+			&& isset($mysoc->tva_assuj) && (string) $mysoc->tva_assuj === '0') {
+			return 'E';
+		}
+		return 'Z';
+	}
+
 	private function taxEl($rate)
 	{
 		$t = $this->el('ram:ApplicableTradeTax');
 		$t->appendChild($this->el('ram:TypeCode', 'VAT'));
-		$t->appendChild($this->el('ram:CategoryCode', $rate > 0 ? 'S' : 'Z'));
+		if ($this->taxCategory($rate) === 'E') {
+			$t->appendChild($this->el('ram:ExemptionReason', self::GERMAN_KU_REASON));
+		}
+		$t->appendChild($this->el('ram:CategoryCode', $this->taxCategory((float) $rate)));
 		$t->appendChild($this->el('ram:RateApplicablePercent', $this->num($rate)));
 		return $t;
 	}
