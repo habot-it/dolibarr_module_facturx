@@ -16,7 +16,9 @@ FacturXRoutingCodeHelp = Code (ou suffixe) communiqué par le client, utilisé u
 
 # Setup page
 FacturXSetup = Configuration du module Factur-X
-FacturXSetupPageHelp = Ces réglages alimentent le XML structuré (CII) embarqué dans les PDF Factur-X. Ils ne modifient pas le rendu visuel du PDF : le pied de page reste géré par le texte libre de Facturation → Configuration.
+FacturXSetupPageHelp = Configurez le logo visible et le XML structuré (CII) embarqué dans les PDF Factur-X. Le pied de page reste géré par le texte libre de Facturation → Configuration.
+FacturXHidePdfLogo = Masquer le logo Factur-X sur les factures
+FacturXHidePdfLogoHelp = Le logo est affiché par défaut. Le masquer modifie uniquement le rendu visuel du PDF ; le XML embarqué et les métadonnées PDF/A-3 restent inchangés. Régénérez les PDF existants pour appliquer ce réglage.
 FacturXNotesTitle = Mentions légales françaises (notes codées BT-22)
 FacturXNotesHelp = Notes exigées par le contrôle FNFE/CIUS-FR (règle BR-FR-05, une seule note par code — BR-FR-06). Émises uniquement si la société émettrice est française. Laisser un champ vide pour utiliser le texte par défaut affiché en grisé.
 FacturXNotePMD = Pénalités de retard (code PMD)

@@ -53,6 +53,11 @@ Generate a customer invoice PDF as usual. The resulting file is a PDF/A-3 with
 `factur-x.xml` attached. Tools such as FNFE-MPE's validator, Chorus Pro and most
 Factur-X readers will pick up the embedded invoice data automatically.
 
+To hide the visible Factur-X logo, open the module setup page and enable
+**Hide the Factur-X logo on invoices** (`FACTURX_HIDE_PDF_LOGO=1`). The logo
+remains visible by default. This only affects newly generated PDFs; the embedded
+XML and PDF/A-3 metadata are unchanged. Regenerate an existing PDF to apply it.
+
 ## French mandatory data (BR-FR rules)
 
 Since 1.1.0 the XML carries the French CTC data checked by the FNFE-MPE
@@ -99,7 +104,7 @@ consistent.
 - Invoice `TypeCode` mapping covers standard (380), credit note (381),
   deposit (386) and proforma (325). Situation invoices (Dolibarr type 5) fall
   back to 380.
-- The setup page only covers the French mentions and the seller electronic
+- The setup page covers logo visibility, the French mentions and the seller electronic
   address. Conformance level, XML filename and `/AFRelationship` value are
   still set in code (see `pdf_facturx.modules.php`).
 - PDF/A requires embedded fonts, so the layout is rendered with TCPDF's
