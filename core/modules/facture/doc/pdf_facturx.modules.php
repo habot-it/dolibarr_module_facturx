@@ -91,7 +91,12 @@ class pdf_facturx extends pdf_sponge
 			return $result;
 		}
 
-		$xml = FacturxXml::buildFromInvoice($object);
+		try {
+			$xml = FacturxXml::buildFromInvoice($object);
+		} catch (RuntimeException $e) {
+			$this->error = $e->getMessage();
+			return -1;
+		}
 		if ($xml === '') {
 			$this->error = 'Factur-X XML generation returned empty content';
 			return -1;
